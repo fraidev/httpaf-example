@@ -17,7 +17,12 @@ let request_handler ~u (_ : Eio.Net.Sockaddr.stream) { Gluten.reqd; _ } =
             ; "connection", "close"
             ]) `OK
       in
-      Reqd.respond_with_string reqd response (String.make 9999999 'a');
+      let result = Caml.Gc.major_slice 2000000000 in
+      Caml.Format.eprintf "result: %d@." result;
+      Caml.Gc.full_major ();
+      (* Caml.Gc.print_stat Caml.stderr; *)
+      (* Caml.stderr |> Caml.flush; *)
+      Reqd.respond_with_string reqd response (String.make 99999999 'a');
       Eio.Promise.resolve u ()
     | _ ->
       let headers = Headers.of_list [ "connection", "close" ] in
@@ -45,11 +50,11 @@ let main port =
   Stdio.printf "  echo \"Testing echo POST\" | dune exec examples/async/async_post.exe\n";
   Stdio.printf "  echo \"Testing echo POST\" | dune exec examples/lwt/lwt_post.exe\n";
   Stdio.printf "  echo \"Testing echo POST\" | curl -XPOST --data @- http://localhost:%d\n\n%!" port;
-  let domain_mgr = Eio.Stdenv.domain_mgr env in
+  (* let domain_mgr = Eio.Stdenv.domain_mgr env in *)
   let p, _ = Eio.Promise.create () in
   for _i = 1 to 1 do
     Eio.Fiber.fork_daemon ~sw (fun () ->
-      Eio.Domain_manager.run domain_mgr (fun () ->
+      (* Eio.Domain_manager.run domain_mgr (fun () -> *)
         Eio.Switch.run (fun sw ->
           while true do
             Eio.Net.accept_fork socket ~sw ~on_error:log_connection_error (fun client_sock client_addr ->
@@ -58,13 +63,15 @@ let main port =
                 Eio.Promise.await p
                 )
           done;
-        `Stop_daemon)))
+        `Stop_daemon))
+      (* ) *)
   done;
   Eio.Promise.await p));
 
 ;;
 
-let () =
+let () =  
+  (* Caml.Gc.set { (Caml.Gc.get ()) with space_overhead = 20; max_overhead = 0; verbose = 0x404 }; *)
   let port = ref 8080 in
   Arg.parse
     ["-p", Arg.Set_int port, " Listening port number (8080 by default)"]
